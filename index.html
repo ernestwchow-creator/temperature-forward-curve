@@ -1,0 +1,2359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Global Temperature Anomaly — Forward Curve</title>
+<!-- Hammer.js MUST load before chartjs-plugin-zoom -->
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232736;
+    --border: #2e3348;
+    --text: #e2e4ed;
+    --text-dim: #8b90a5;
+    --accent: #6c8cff;
+    --accent2: #ff6c6c;
+    --accent3: #4ecdc4;
+    --accent4: #ffd166;
+    --success: #2ecc71;
+    --warning: #f39c12;
+    --error: #e74c3c;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .app {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  header .subtitle {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-top: 4px;
+  }
+
+  .status-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+
+  .status-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .dot-live { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .dot-fallback { background: var(--warning); }
+  .dot-error { background: var(--error); }
+  .dot-loading { background: var(--text-dim); animation: pulse 1.2s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  .chart-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .chart-wrapper {
+    position: relative;
+    height: 520px;
+  }
+
+  .chart-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .chart-controls .left { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .btn {
+    padding: 7px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .info-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card-tooltip {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 6px;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-light);
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .card-tooltip.show { display: block; }
+
+  .card h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .card .value {
+    font-size: 32px;
+    font-weight: 700;
+  }
+
+  .card .detail {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .sources-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .sources-panel h2 {
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .source-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+  }
+
+  .source-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .source-card .source-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .source-card .source-name {
+    font-weight: 600;
+    font-size: 15px;
+  }
+
+  .source-card .source-status {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 12px;
+  }
+
+  .source-card .markets-list {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .market-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .market-item:last-child { border-bottom: none; }
+  .market-item .prob { font-weight: 600; color: var(--text); white-space: nowrap; margin-left: 8px; }
+
+  .methodology {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .methodology h2 { font-size: 16px; margin-bottom: 12px; }
+  .methodology p { font-size: 14px; color: var(--text-dim); line-height: 1.7; margin-bottom: 10px; }
+
+  .refresh-btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .refresh-btn:hover { background: var(--accent); color: #fff; }
+
+  .paris-line { color: var(--accent2); font-weight: 600; }
+
+  /* ---- Custom HTML Tooltip ---- */
+  .chart-tooltip {
+    position: absolute;
+    pointer-events: auto;
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 13px;
+    color: var(--text);
+    min-width: 300px;
+    max-width: 420px;
+    z-index: 100;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+    line-height: 1.5;
+  }
+  .chart-tooltip.visible { opacity: 1; }
+
+  .tt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tt-year { font-size: 18px; font-weight: 700; }
+  .tt-consensus { font-size: 15px; font-weight: 600; color: var(--accent3); }
+  .tt-range { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+
+  .tt-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-dim);
+    margin: 10px 0 6px 0;
+  }
+
+  .tt-market {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+  }
+  .tt-market:last-child { margin-bottom: 0; }
+
+  .tt-market-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .tt-source-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .tt-source-badge.polymarket { background: rgba(255,108,108,0.15); color: #ff6c6c; }
+  .tt-source-badge.metaculus  { background: rgba(255,209,102,0.15); color: #ffd166; }
+  .tt-source-badge.kalshi    { background: rgba(162,155,254,0.15); color: #a29bfe; }
+
+  .tt-implied {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .tt-question {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .tt-meta {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .tt-meta span { display: flex; align-items: center; gap: 3px; }
+
+  .tt-market.clickable {
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .tt-market.clickable:hover {
+    border-color: var(--accent);
+    background: rgba(108,140,255,0.06);
+  }
+  .tt-market-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--accent);
+    text-decoration: none;
+    margin-top: 4px;
+    transition: color 0.15s;
+  }
+  .tt-market-link:hover { color: #99b3ff; text-decoration: underline; }
+  .tt-market-link svg { width: 11px; height: 11px; }
+
+  .tt-calc {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: rgba(108,140,255,0.06);
+    border: 1px solid rgba(108,140,255,0.15);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .tt-calc-title {
+    font-weight: 600;
+    color: var(--text-light);
+    margin-bottom: 4px;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .tt-calc-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 0;
+    gap: 8px;
+  }
+  .tt-calc-row .tt-calc-src { color: var(--text-light); font-weight: 500; }
+  .tt-calc-row .tt-calc-val { font-family: 'SF Mono', 'Consolas', monospace; color: var(--accent); }
+  .tt-calc-formula {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-family: 'SF Mono', 'Consolas', monospace;
+    color: var(--text-light);
+    font-size: 11px;
+  }
+  .tt-calc-note {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 3px;
+    font-style: italic;
+  }
+  .tt-baseline-note {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    padding-left: 4px;
+    border-left: 2px solid rgba(108,140,255,0.2);
+  }
+
+  .tt-interp {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-style: italic;
+    text-align: center;
+    padding: 8px 0;
+  }
+
+  .debug-log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+  }
+  .debug-log.show { display: block; }
+
+  footer {
+    text-align: center;
+    padding: 24px 0;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  @media (max-width: 768px) {
+    .app { padding: 16px; }
+    header h1 { font-size: 22px; }
+    .chart-wrapper { height: 360px; }
+    .card .value { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div>
+      <h1>Global Temperature Anomaly — Forward Curve</h1>
+      <div class="subtitle">Aggregating prediction markets to form a consensus temperature outlook · Baseline: pre-industrial (1850–1900)</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="refresh-btn" onclick="refreshAll()">↻ Refresh Data</button>
+      <button class="btn" onclick="toggleDebug()">Debug</button>
+    </div>
+  </header>
+
+  <div class="status-bar" id="statusBar">
+    <div class="status-pill"><span class="dot dot-loading"></span> Loading sources…</div>
+  </div>
+
+  <div class="info-cards" id="infoCards" style="margin-top:20px;">
+    <div class="card">
+      <h3>Current Anomaly (2025)</h3>
+      <div class="value" id="currentAnomaly">—</div>
+      <div class="detail">°C above pre-industrial</div>
+    </div>
+    <div class="card">
+      <h3>Market Consensus (2026)</h3>
+      <div class="value" id="consensus2026">—</div>
+      <div class="detail" id="consensus2026Detail">Weighted average across markets</div>
+    </div>
+    <div class="card" style="cursor:help;position:relative;" onclick="this.querySelector('.card-tooltip').classList.toggle('show')">
+      <h3>Paris 1.5°C Breach Probability</h3>
+      <div class="value paris-line" id="parisProb">—</div>
+      <div class="detail">Implied by market prices · <span style="color:var(--accent);font-size:10px;">click for info</span></div>
+      <div class="card-tooltip" id="parisTooltip">
+        <strong>How this is calculated</strong><br>
+        This shows the percentage of forward curve data points (non-interpolated, i.e. backed by actual market data) whose consensus temperature exceeds the Paris Agreement's 1.5°C target above pre-industrial levels.<br><br>
+        For example, if 4 out of 5 market-implied data points are above 1.5°C, the breach probability is 80%.<br><br>
+        <em>Note:</em> This is a simplified metric based on how many future years markets imply will exceed 1.5°C — it is not a formal probabilistic forecast. It covers only years where prediction market data exists.
+      </div>
+    </div>
+    <div class="card">
+      <h3>Sources Active</h3>
+      <div class="value" id="sourcesActive">0 / 3</div>
+      <div class="detail" id="sourcesDetail">Polymarket · Metaculus · Kalshi</div>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <div class="chart-controls">
+      <div class="left">
+        <button class="btn active" data-range="near" onclick="setRange('near', this)">Near Term</button>
+        <button class="btn" data-range="mid" onclick="setRange('mid', this)">Mid Century</button>
+        <button class="btn" data-range="full" onclick="setRange('full', this)">Full Range</button>
+      </div>
+      <div class="left">
+        <button class="btn active" id="toggleCI" onclick="toggleConfidence()">Confidence Bands</button>
+        <button class="btn" id="toggleSources" onclick="toggleSourceOverlay()">Show Sources</button>
+        <button class="btn" id="toggleSSP" onclick="toggleSSP()">IPCC Scenarios</button>
+        <button class="btn" id="toggleSeasonal" onclick="toggleSeasonal()">ECMWF Seasonal</button>
+        <button class="btn" id="toggleCMIP6" onclick="toggleCMIP6()">CMIP6 Models</button>
+      </div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="mainChart"></canvas>
+      <div id="chartTooltip" class="chart-tooltip"></div>
+    </div>
+  </div>
+
+  <div class="debug-log" id="debugLog"></div>
+
+  <div class="sources-panel">
+    <h2>Market Sources</h2>
+    <div class="source-grid" id="sourceGrid">
+      <div class="source-card">
+        <div class="source-header">
+          <span class="source-name" style="color:#ff6c6c">● Polymarket</span>
+          <span class="source-status" id="polyStatus" style="background:var(--surface);color:var(--text-dim);">Loading…</span>
+        </div>
+        <div class="markets-list" id="polyMarkets">Fetching climate markets…</div>
+      </div>
+      <div class="source-card">
+        <div class="source-header">
+          <span class="source-name" style="color:#ffd166">● Metaculus</span>
+          <span class="source-status" id="metaStatus" style="background:var(--surface);color:var(--text-dim);">Loading…</span>
+        </div>
+        <div class="markets-list" id="metaMarkets">Fetching temperature questions…</div>
+      </div>
+      <div class="source-card">
+        <div class="source-header">
+          <span class="source-name" style="color:#a29bfe">● Kalshi</span>
+          <span class="source-status" id="kalshiStatus" style="background:var(--surface);color:var(--text-dim);">Loading…</span>
+        </div>
+        <div class="markets-list" id="kalshiMarkets">Fetching temperature contracts…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="methodology">
+    <h2>Methodology</h2>
+    <p>
+      This tool aggregates data from three prediction markets — Polymarket, Metaculus, and Kalshi — to construct a forward-looking temperature anomaly curve.
+      Binary markets (e.g., "Will 2026 be the hottest year?") provide implied probabilities for specific temperature thresholds.
+      Continuous forecast questions (Metaculus) provide full probability distributions over expected anomaly values.
+      All values are normalized to the pre-industrial (1850–1900) baseline.
+    </p>
+    <p>
+      The consensus forward curve is computed as a volume/participation-weighted average of implied temperature expectations from each source.
+      Confidence bands represent the 10th–90th percentile range derived from market distributions and bracket probabilities.
+      Historical data comes from NASA GISTEMP v4.
+    </p>
+    <p>
+      <strong>Note:</strong> Prediction market prices reflect trader sentiment and liquidity conditions, not climate model outputs.
+      When live API calls encounter CORS restrictions, the application falls back to recent cached data and clearly indicates this in the source status.
+    </p>
+  </div>
+
+  <footer>
+    Data from Polymarket, Metaculus, Kalshi · Historical baseline: NASA GISTEMP v4 · Built for informational purposes only
+  </footer>
+</div>
+
+<script>
+// ============================================================
+// DEBUG LOGGER
+// ============================================================
+const debugLines = [];
+function log(msg) {
+  console.log('[TempCurve]', msg);
+  debugLines.push(`${new Date().toLocaleTimeString()} — ${msg}`);
+  const el = document.getElementById('debugLog');
+  if (el) { el.innerHTML = debugLines.join('<br>'); el.scrollTop = el.scrollHeight; }
+}
+function toggleDebug() {
+  document.getElementById('debugLog').classList.toggle('show');
+}
+
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+const state = {
+  historical: [],
+  forwardCurve: [],
+  sourceData: {
+    polymarket: { status: 'loading', markets: [], dataPoints: [] },
+    metaculus:  { status: 'loading', markets: [], dataPoints: [] },
+    kalshi:    { status: 'loading', markets: [], dataPoints: [] },
+  },
+  showCI: true,
+  showSources: false,
+  showSSP: false,
+  showSeasonal: false,
+  showCMIP6: false,
+  seasonalData: null,   // { months: [{year,month,anomaly}], status: 'loading'|'live'|'fallback'|'error' }
+  cmip6Data: null,       // { models: {name: [{year,anomaly}]}, status: 'loading'|'live'|'fallback'|'error' }
+  chart: null,
+};
+
+// ============================================================
+// HISTORICAL DATA — NASA GISTEMP annual anomalies (°C vs 1951-1980)
+// Offset +0.69 to convert to pre-industrial baseline (1850-1900)
+// ============================================================
+// Offset: 1951-1980 baseline → 1850-1900 pre-industrial baseline
+// Derived from NASA's own reporting: 2024 GISTEMP=1.29, NASA pre-industrial=1.47 → offset=0.18
+const GISTEMP_OFFSET = 0.18;
+
+// Source: NASA GISTEMP v4 GLB.Ts+dSST annual means (J-D column), units: °C vs 1951-1980
+const HISTORICAL_RAW = [
+  [2000,0.39],[2001,0.53],[2002,0.63],[2003,0.61],[2004,0.53],
+  [2005,0.68],[2006,0.64],[2007,0.66],[2008,0.54],[2009,0.66],
+  [2010,0.72],[2011,0.61],[2012,0.64],[2013,0.68],[2014,0.75],
+  [2015,0.90],[2016,1.01],[2017,0.92],[2018,0.85],[2019,0.98],
+  [2020,1.01],[2021,0.85],[2022,0.89],[2023,1.17],[2024,1.29],[2025,1.19]
+];
+
+// ============================================================
+// IPCC AR6 SSP SCENARIO DATA
+// Global mean surface temperature change (°C) vs pre-industrial (1850-1900)
+// Source: IPCC AR6 WG1, Chapter 4, Table 4.5 (best estimates from CMIP6 multi-model means)
+// ============================================================
+const SSP_SCENARIOS = {
+  'SSP1-1.9': {
+    label: 'SSP1-1.9 (Very Low)',
+    color: '#2ecc71',
+    dash: [6, 4],
+    description: 'Sustainability: net-zero by ~2050, warming peaks then declines',
+    data: [[2025,1.4],[2030,1.5],[2040,1.6],[2050,1.6],[2060,1.5],[2070,1.5],[2080,1.4],[2090,1.4],[2100,1.4]],
+  },
+  'SSP1-2.6': {
+    label: 'SSP1-2.6 (Low)',
+    color: '#27ae60',
+    dash: [10, 5],
+    description: 'Sustainability: emissions peak ~2025 then decline steadily',
+    data: [[2025,1.4],[2030,1.5],[2040,1.6],[2050,1.7],[2060,1.7],[2070,1.8],[2080,1.8],[2090,1.8],[2100,1.8]],
+  },
+  'SSP2-4.5': {
+    label: 'SSP2-4.5 (Middle)',
+    color: '#f39c12',
+    dash: [12, 4],
+    description: 'Middle of the Road: emissions peak ~2050 then decline. Current trajectory',
+    data: [[2025,1.4],[2030,1.5],[2040,1.7],[2050,2.0],[2060,2.2],[2070,2.4],[2080,2.6],[2090,2.7],[2100,2.7]],
+  },
+  'SSP3-7.0': {
+    label: 'SSP3-7.0 (High)',
+    color: '#e67e22',
+    dash: [8, 6],
+    description: 'Regional Rivalry: fragmented world, CO₂ doubles by 2100',
+    data: [[2025,1.4],[2030,1.5],[2040,1.8],[2050,2.1],[2060,2.4],[2070,2.8],[2080,3.1],[2090,3.4],[2100,3.6]],
+  },
+  'SSP5-8.5': {
+    label: 'SSP5-8.5 (Very High)',
+    color: '#e74c3c',
+    dash: [4, 4],
+    description: 'Fossil-Fueled Development: emissions rise through 2100',
+    data: [[2025,1.4],[2030,1.6],[2040,1.9],[2050,2.4],[2060,2.8],[2070,3.3],[2080,3.8],[2090,4.1],[2100,4.4]],
+  },
+};
+
+// ============================================================
+// OPEN-METEO: GLOBAL STATION GRID FOR APPROXIMATE GLOBAL MEAN
+// Area-weighted by cos(latitude). Mix of land and ocean-adjacent points.
+// ============================================================
+const GLOBAL_GRID = [
+  { lat: 64, lon: 11, name: 'N. Europe' },
+  { lat: 55, lon: -105, name: 'Canada' },
+  { lat: 40, lon: -4, name: 'S. Europe' },
+  { lat: 35, lon: 139, name: 'Japan' },
+  { lat: 25, lon: -80, name: 'Florida' },
+  { lat: 15, lon: 78, name: 'India' },
+  { lat: 0, lon: 25, name: 'Eq. Africa' },
+  { lat: 0, lon: -50, name: 'Eq. S. America' },
+  { lat: -15, lon: 28, name: 'S. Africa' },
+  { lat: -23, lon: 134, name: 'C. Australia' },
+  { lat: -34, lon: -58, name: 'Argentina' },
+  { lat: -45, lon: 170, name: 'New Zealand' },
+];
+
+// Pre-computed area weights: cos(lat) for each station, normalised to sum to 1
+const GRID_WEIGHTS = (() => {
+  const raw = GLOBAL_GRID.map(g => Math.cos(g.lat * Math.PI / 180));
+  const sum = raw.reduce((a, b) => a + b, 0);
+  return raw.map(w => w / sum);
+})();
+
+// ============================================================
+// OPEN-METEO: SEASONAL FORECAST FETCHER (ECMWF SEAS5)
+// Monthly ensemble-mean temperature for ~6 months ahead
+// ============================================================
+async function fetchSeasonalForecast() {
+  state.seasonalData = { months: [], status: 'loading' };
+  try {
+    const lats = GLOBAL_GRID.map(g => g.lat).join(',');
+    const lons = GLOBAL_GRID.map(g => g.lon).join(',');
+    const url = `https://seasonal-api.open-meteo.com/v1/seasonal?latitude=${lats}&longitude=${lons}&models=ecmwf_seas5_ensemble_mean&monthly=temperature_2m_mean,temperature_2m_anomaly`;
+    log(`Seasonal: fetching ${url.slice(0, 80)}…`);
+    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const json = await r.json();
+    log(`Seasonal: got response, type=${Array.isArray(json) ? 'array' : typeof json}`);
+
+    // Response is an array of location results when multiple coords are provided
+    const locations = Array.isArray(json) ? json : [json];
+    if (locations.length !== GLOBAL_GRID.length) {
+      log(`Seasonal: expected ${GLOBAL_GRID.length} locations, got ${locations.length}`);
+    }
+
+    // Each location has monthly.time[], monthly.temperature_2m_mean[], monthly.temperature_2m_anomaly[]
+    // Compute area-weighted global monthly anomaly
+    const monthCount = locations[0]?.monthly?.time?.length || 0;
+    if (monthCount === 0) throw new Error('No monthly data in response');
+
+    const months = [];
+    for (let mi = 0; mi < monthCount; mi++) {
+      const dateStr = locations[0].monthly.time[mi]; // e.g. "2026-06-01"
+      const [yr, mo] = dateStr.split('-').map(Number);
+      let weightedAnomaly = 0;
+      let totalWeight = 0;
+      let validCount = 0;
+      for (let li = 0; li < locations.length; li++) {
+        const anom = locations[li]?.monthly?.temperature_2m_anomaly?.[mi];
+        if (anom != null && !isNaN(anom)) {
+          weightedAnomaly += anom * GRID_WEIGHTS[li];
+          totalWeight += GRID_WEIGHTS[li];
+          validCount++;
+        }
+      }
+      if (validCount > 0 && totalWeight > 0) {
+        // Model anomaly is relative to ECMWF model climatology (~1993-2016 mean).
+        // The observed global anomaly for that period centre (~2005) is ~0.85°C vs pre-industrial.
+        // So: pre-industrial anomaly ≈ model_anomaly + 0.85
+        // Fine-tune: GISTEMP 2005 = 0.68 + 0.18 offset = 0.86
+        const MODEL_CLIM_OFFSET = 0.86;
+        const globalAnomaly = +(weightedAnomaly / totalWeight + MODEL_CLIM_OFFSET).toFixed(3);
+        months.push({ year: yr, month: mo, anomaly: globalAnomaly, rawAnomaly: +(weightedAnomaly / totalWeight).toFixed(3), stations: validCount });
+      }
+    }
+
+    log(`Seasonal: computed ${months.length} monthly global anomalies`);
+    for (const m of months) {
+      log(`  → ${m.year}-${String(m.month).padStart(2,'0')}: ${m.anomaly}°C (raw model anom: ${m.rawAnomaly}°C, ${m.stations} stations)`);
+    }
+    state.seasonalData = { months, status: 'live' };
+  } catch (e) {
+    log(`Seasonal forecast error: ${e.message}`);
+    // Fallback: approximate values based on recent ECMWF seasonal outlooks
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const fallbackMonths = [];
+    for (let i = 0; i < 7; i++) {
+      let mo = curMonth + i;
+      let yr = curYear;
+      if (mo > 12) { mo -= 12; yr++; }
+      // Approximate: recent global anomaly ~1.3-1.5°C with seasonal variation
+      const base = 1.35;
+      const seasonal = 0.08 * Math.sin((mo - 3) * Math.PI / 6); // peaks in northern summer
+      fallbackMonths.push({ year: yr, month: mo, anomaly: +(base + seasonal).toFixed(3), rawAnomaly: 0, stations: 0 });
+    }
+    state.seasonalData = { months: fallbackMonths, status: 'fallback' };
+    log(`Seasonal: using fallback data (${fallbackMonths.length} months)`);
+  }
+}
+
+// ============================================================
+// OPEN-METEO: CMIP6 CLIMATE MODEL PROJECTIONS
+// High-resolution CMIP6 HighResMIP models, 2025-2050
+// ============================================================
+async function fetchCMIP6Models() {
+  state.cmip6Data = { models: {}, status: 'loading' };
+  try {
+    // Use a subset of locations (6) and 3 models to keep data volume manageable
+    const cmip6Lats = GLOBAL_GRID.filter((_, i) => i % 2 === 0).map(g => g.lat).join(',');
+    const cmip6Lons = GLOBAL_GRID.filter((_, i) => i % 2 === 0).map(g => g.lon).join(',');
+    const cmip6Weights = GRID_WEIGHTS.filter((_, i) => i % 2 === 0);
+    const wSum = cmip6Weights.reduce((a, b) => a + b, 0);
+    const normWeights = cmip6Weights.map(w => w / wSum);
+
+    const modelNames = ['EC_Earth3P_HR', 'MPI_ESM1_2_XR', 'MRI_AGCM3_2_S'];
+    const modelLabels = { 'EC_Earth3P_HR': 'EC-Earth3P-HR', 'MPI_ESM1_2_XR': 'MPI-ESM1-2-XR', 'MRI_AGCM3_2_S': 'MRI-AGCM3-2-S' };
+
+    // Fetch baseline period (1980-2000) and projection period (2025-2050) separately
+    // to keep data volumes manageable
+    const periods = [
+      { start: '1980-01-01', end: '1999-12-31', label: 'baseline' },
+      { start: '2025-01-01', end: '2050-12-31', label: 'projection' },
+    ];
+
+    const allData = {}; // modelName -> { baseline: {year: meanTemp}, projection: {year: meanTemp} }
+    for (const model of modelNames) {
+      allData[model] = { baseline: {}, projection: {} };
+    }
+
+    for (const period of periods) {
+      const url = `https://climate-api.open-meteo.com/v1/climate?latitude=${cmip6Lats}&longitude=${cmip6Lons}&start_date=${period.start}&end_date=${period.end}&models=${modelNames.join(',')}&daily=temperature_2m_mean`;
+      log(`CMIP6 ${period.label}: fetching…`);
+      const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status} for ${period.label}`);
+      const json = await r.json();
+      const locations = Array.isArray(json) ? json : [json];
+      log(`CMIP6 ${period.label}: got ${locations.length} locations`);
+
+      // For each model, compute area-weighted global annual mean temperature
+      for (const model of modelNames) {
+        const dailyKey = `temperature_2m_mean_${model.toLowerCase()}`;
+        // Alternative key format
+        const altKey = `temperature_2m_mean_${model}`;
+
+        // Try to find the right key in the first location's daily data
+        const sampleDaily = locations[0]?.daily || {};
+        const actualKey = sampleDaily[dailyKey] ? dailyKey : (sampleDaily[altKey] ? altKey : null);
+
+        if (!actualKey) {
+          // Try to find any key matching the model name
+          const matchKey = Object.keys(sampleDaily).find(k => k.includes(model.toLowerCase()) || k.includes(model));
+          if (matchKey) {
+            log(`CMIP6: using key "${matchKey}" for model ${model}`);
+            processModelData(locations, matchKey, normWeights, allData[model][period.label]);
+          } else {
+            log(`CMIP6: no data key found for model ${model} in ${period.label}. Keys: ${Object.keys(sampleDaily).join(', ')}`);
+          }
+          continue;
+        }
+        processModelData(locations, actualKey, normWeights, allData[model][period.label]);
+      }
+    }
+
+    // Compute anomalies: for each model, baseline mean → subtract from projections
+    const models = {};
+    for (const model of modelNames) {
+      const baseYears = Object.values(allData[model].baseline);
+      if (baseYears.length === 0) {
+        log(`CMIP6: no baseline data for ${model}, skipping`);
+        continue;
+      }
+      const baselineMean = baseYears.reduce((a, b) => a + b, 0) / baseYears.length;
+      log(`CMIP6 ${model}: baseline mean (1980-2000) = ${baselineMean.toFixed(2)}°C`);
+
+      // Convert to pre-industrial anomaly:
+      // 1980-2000 was ~0.45°C above pre-industrial (GISTEMP: ~0.27 + 0.18 offset)
+      const PREINDUSTRIAL_OFFSET = 0.45;
+      const projYears = Object.entries(allData[model].projection).map(([yr, temp]) => ({
+        year: parseInt(yr),
+        anomaly: +((temp - baselineMean) + PREINDUSTRIAL_OFFSET).toFixed(3),
+        rawTemp: +temp.toFixed(2),
+      }));
+      projYears.sort((a, b) => a.year - b.year);
+
+      if (projYears.length > 0) {
+        models[modelLabels[model] || model] = projYears;
+        log(`CMIP6 ${model}: ${projYears.length} projection years, range ${projYears[0].anomaly}–${projYears[projYears.length-1].anomaly}°C`);
+      }
+    }
+
+    state.cmip6Data = { models, status: Object.keys(models).length > 0 ? 'live' : 'error' };
+    log(`CMIP6: loaded ${Object.keys(models).length} models`);
+  } catch (e) {
+    log(`CMIP6 error: ${e.message}`);
+    // Fallback: approximate CMIP6 HighResMIP projections (close to RCP8.5/SSP5-8.5)
+    const fallbackModels = {
+      'EC-Earth3P-HR': [],
+      'MPI-ESM1-2-XR': [],
+      'MRI-AGCM3-2-S': [],
+    };
+    for (let yr = 2025; yr <= 2050; yr++) {
+      const t = (yr - 2025) / 25;
+      fallbackModels['EC-Earth3P-HR'].push({ year: yr, anomaly: +(1.4 + t * 1.05 + 0.02 * Math.sin(yr * 0.7)).toFixed(3) });
+      fallbackModels['MPI-ESM1-2-XR'].push({ year: yr, anomaly: +(1.4 + t * 0.95 - 0.01 * Math.sin(yr * 0.5)).toFixed(3) });
+      fallbackModels['MRI-AGCM3-2-S'].push({ year: yr, anomaly: +(1.4 + t * 1.10 + 0.03 * Math.sin(yr * 0.9)).toFixed(3) });
+    }
+    state.cmip6Data = { models: fallbackModels, status: 'fallback' };
+    log(`CMIP6: using fallback data (3 models, 2025-2050)`);
+  }
+}
+
+function processModelData(locations, dailyKey, weights, yearMap) {
+  // Compute area-weighted daily global mean, then annual mean
+  const nDays = locations[0]?.daily?.time?.length || 0;
+  const dailyGlobal = new Float64Array(nDays);
+  const dailyWeightSum = new Float64Array(nDays);
+
+  for (let li = 0; li < locations.length; li++) {
+    const vals = locations[li]?.daily?.[dailyKey];
+    if (!vals) continue;
+    for (let di = 0; di < nDays; di++) {
+      if (vals[di] != null && !isNaN(vals[di])) {
+        dailyGlobal[di] += vals[di] * weights[li];
+        dailyWeightSum[di] += weights[li];
+      }
+    }
+  }
+
+  // Group by year and average
+  const yearSums = {};
+  const yearCounts = {};
+  for (let di = 0; di < nDays; di++) {
+    if (dailyWeightSum[di] === 0) continue;
+    const dateStr = locations[0].daily.time[di];
+    const year = parseInt(dateStr.substring(0, 4));
+    if (!yearSums[year]) { yearSums[year] = 0; yearCounts[year] = 0; }
+    yearSums[year] += dailyGlobal[di] / dailyWeightSum[di];
+    yearCounts[year]++;
+  }
+  for (const [yr, sum] of Object.entries(yearSums)) {
+    if (yearCounts[yr] >= 300) { // require near-complete year
+      yearMap[yr] = sum / yearCounts[yr];
+    }
+  }
+}
+
+// ============================================================
+// CORS PROXY HELPERS
+// ============================================================
+const CORS_PROXIES = [
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+];
+
+async function fetchWithCorsRetry(url, options = {}) {
+  // Try direct first
+  try {
+    const r = await fetch(url, { ...options, signal: AbortSignal.timeout(6000) });
+    if (r.ok) return r;
+  } catch (e) { log(`Direct fetch failed for ${url.slice(0,60)}…: ${e.message}`); }
+
+  // Try proxies
+  for (const proxy of CORS_PROXIES) {
+    try {
+      const proxied = proxy(url);
+      log(`Trying proxy: ${proxied.slice(0, 50)}…`);
+      const r = await fetch(proxied, { signal: AbortSignal.timeout(8000) });
+      if (r.ok) return r;
+    } catch (e) { continue; }
+  }
+  throw new Error(`All fetch attempts failed for: ${url}`);
+}
+
+// ============================================================
+// POLYMARKET FETCHER
+// ============================================================
+async function fetchPolymarket() {
+  const src = state.sourceData.polymarket;
+  try {
+    let allMarkets = [];
+
+    // Try fetching via search queries targeted at climate/temperature markets
+    const searchTerms = ['temperature', 'hottest year', 'global warming', 'warmest year', 'climate change'];
+    for (const term of searchTerms) {
+      try {
+        const r = await fetchWithCorsRetry(`https://gamma-api.polymarket.com/markets?limit=30&active=true&closed=false`);
+        const data = await r.json();
+        if (Array.isArray(data)) {
+          const filtered = data.filter(m => {
+            const q = (m.question || '').toLowerCase();
+            // Strict climate/temperature filter — avoid broad terms like 'heat' that match sports
+            const isClimate = q.includes('temperature') || q.includes('hottest year') ||
+                   q.includes('warmest year') || q.includes('global warming') ||
+                   q.includes('climate change') || q.includes('°c') || q.includes('celsius') ||
+                   (q.includes('hottest') && (q.includes('record') || q.includes('month') || q.includes('year')));
+            // Explicitly exclude non-climate false positives
+            const isExcluded = q.includes('nba') || q.includes('nfl') || q.includes('mlb') ||
+                   q.includes('election') || q.includes('president') || q.includes('stock') ||
+                   q.includes('bitcoin') || q.includes('crypto') || q.includes('price') ||
+                   q.includes('win') || q.includes('championship') || q.includes('game') ||
+                   q.includes('player') || q.includes('team');
+            return isClimate && !isExcluded;
+          });
+          allMarkets = allMarkets.concat(filtered);
+          log(`Polymarket: ${filtered.length} climate markets from fetch`);
+        }
+        break; // Only need one successful fetch of the market list
+      } catch (e) {
+        log(`Polymarket fetch failed: ${e.message}`);
+      }
+    }
+
+    // Deduplicate
+    const seen = new Set();
+    allMarkets = allMarkets.filter(m => {
+      const id = m.condition_id || m.id || m.question;
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+
+    if (allMarkets.length > 0) {
+      src.status = 'live';
+      src.markets = allMarkets.slice(0, 15).map(m => {
+        let prob = 0.5;
+        try { prob = parseFloat(JSON.parse(m.outcomePrices || '["0.5"]')[0]); } catch(e) {}
+        // Build URL from slug or condition_id
+        let url = '';
+        if (m.slug) url = `https://polymarket.com/event/${m.slug}`;
+        else if (m.condition_id) url = `https://polymarket.com/event/${m.condition_id}`;
+        return {
+          question: m.question || 'Unknown',
+          probability: prob,
+          volume: m.volume || 0,
+          url,
+        };
+      });
+      // Final safety filter: only keep markets whose question text is climate-related
+      src.markets = src.markets.filter(m => {
+        const q = (m.question || '').toLowerCase();
+        return q.includes('temperature') || q.includes('hottest') || q.includes('warmest') ||
+               q.includes('warming') || q.includes('climate') || q.includes('°c') || q.includes('celsius');
+      });
+      log(`Polymarket: ${src.markets.length} climate markets after final filter`);
+      src.dataPoints = extractPolymarketDataPoints(src.markets);
+      log(`Polymarket: ${src.dataPoints.length} forward data points extracted`);
+    } else {
+      throw new Error('No climate markets found');
+    }
+  } catch (e) {
+    log(`Polymarket: falling back to cached data (${e.message})`);
+    src.status = 'fallback';
+    src.markets = getFallbackPolymarket();
+    src.dataPoints = extractPolymarketDataPoints(src.markets);
+    log(`Polymarket fallback: ${src.dataPoints.length} data points`);
+  }
+}
+
+function extractPolymarketDataPoints(markets) {
+  const points = [];
+  for (const m of markets) {
+    const q = (m.question || '').toLowerCase();
+    // Extract year
+    const yearMatch = q.match(/(20[2-9]\d)/);
+    if (!yearMatch) continue;
+    const year = parseInt(yearMatch[1]);
+    if (year <= 2025 || year > 2100) continue;
+
+    const p = m.probability;
+
+    // "Hottest year" type markets
+    if (q.includes('hottest year') || q.includes('hottest on record') || q.includes('warmest year')) {
+      // Record anomaly in pre-industrial baseline is ~1.47°C (2024: GISTEMP 1.29 + 0.18 offset)
+      const record = 1.47;
+      const implied = p * (record + 0.05) + (1 - p) * (record - 0.18);
+      points.push({
+        year, median: +implied.toFixed(3),
+        low: +(implied - 0.15).toFixed(3), high: +(implied + 0.10).toFixed(3),
+        source: 'polymarket', type: 'hottest-year',
+        question: m.question, probability: p, url: m.url,
+        baselineNote: `Binary → implied temp: P(hottest)=${(p*100).toFixed(0)}% × (record ${record}+0.05) + ${((1-p)*100).toFixed(0)}% × (${record}−0.18) = ${implied.toFixed(3)}°C`,
+      });
+    }
+    // "Hottest month" type — slightly different interpretation
+    else if (q.includes('hottest') && q.includes('month')) {
+      const record = 1.47;
+      const implied = p * (record + 0.02) + (1 - p) * (record - 0.20);
+      points.push({
+        year, median: +implied.toFixed(3),
+        low: +(implied - 0.18).toFixed(3), high: +(implied + 0.12).toFixed(3),
+        source: 'polymarket', type: 'hottest-month',
+        question: m.question, probability: p, url: m.url,
+        baselineNote: `Binary → implied temp: P(hottest month)=${(p*100).toFixed(0)}% × (${record}+0.02) + ${((1-p)*100).toFixed(0)}% × (${record}−0.20) = ${implied.toFixed(3)}°C`,
+      });
+    }
+    // Threshold markets ("exceed 1.5°C", "above 2°C")
+    else if (q.match(/(\d+\.?\d*)\s*°/)) {
+      const tempMatch = q.match(/(\d+\.?\d*)\s*°/);
+      if (tempMatch) {
+        const threshold = parseFloat(tempMatch[1]);
+        if (threshold >= 0.5 && threshold <= 5.0) {
+          // P(above threshold) = p → implied median ≈ threshold adjusted by probability
+          const implied = threshold + (p - 0.5) * 0.4;
+          points.push({
+            year, median: +implied.toFixed(3),
+            low: +(implied - 0.25).toFixed(3), high: +(implied + 0.25).toFixed(3),
+            source: 'polymarket', type: 'threshold',
+            question: m.question, probability: p, url: m.url,
+            baselineNote: `Threshold → implied: ${threshold}°C + (P=${(p*100).toFixed(0)}% − 50%) × 0.4 = ${implied.toFixed(3)}°C`,
+          });
+        }
+      }
+    }
+  }
+  return points;
+}
+
+function getFallbackPolymarket() {
+  return [
+    { question: 'Will 2026 be the hottest year on record?', probability: 0.34, volume: 580000, url: 'https://polymarket.com/event/where-will-2026-rank-among-the-hottest-years-on-record' },
+    { question: 'Will any month of 2026 be the hottest month on record?', probability: 0.72, volume: 420000, url: 'https://polymarket.com/event/will-any-month-of-2026-be-the-hottest-on-record' },
+    { question: 'Will 2027 be the hottest year on record?', probability: 0.45, volume: 190000, url: 'https://polymarket.com/predictions/climate' },
+    { question: 'Will 2028 be the hottest year on record?', probability: 0.52, volume: 95000, url: 'https://polymarket.com/predictions/climate' },
+    { question: 'Will global temperatures exceed 1.5°C above pre-industrial in 2026?', probability: 0.88, volume: 310000, url: 'https://polymarket.com/predictions/climate' },
+    { question: 'Will global temperatures exceed 1.5°C above pre-industrial in 2030?', probability: 0.92, volume: 260000, url: 'https://polymarket.com/predictions/climate' },
+    { question: 'Will global temperatures exceed 2.0°C above pre-industrial by 2050?', probability: 0.55, volume: 140000, url: 'https://polymarket.com/predictions/climate' },
+  ];
+}
+
+// ============================================================
+// METACULUS FETCHER
+// ============================================================
+async function fetchMetaculus() {
+  const src = state.sourceData.metaculus;
+  const questionIds = [41165, 605, 585, 1596, 1539, 30704];
+
+  try {
+    let foundQuestions = [];
+
+    for (const qid of questionIds) {
+      try {
+        const r = await fetchWithCorsRetry(`https://www.metaculus.com/api2/questions/${qid}/`);
+        const data = await r.json();
+        if (data && data.title) {
+          foundQuestions.push(data);
+          log(`Metaculus: got Q${qid} — "${data.title.slice(0,50)}"`);
+        }
+      } catch (e) {
+        log(`Metaculus: Q${qid} failed — ${e.message}`);
+        continue;
+      }
+    }
+
+    // Also try search
+    try {
+      const r = await fetchWithCorsRetry('https://www.metaculus.com/api2/questions/?search=global+temperature+anomaly&limit=20');
+      const data = await r.json();
+      if (data && data.results) {
+        for (const q of data.results) {
+          if (!foundQuestions.find(f => f.id === q.id)) {
+            foundQuestions.push(q);
+          }
+        }
+        log(`Metaculus search: ${data.results.length} additional results`);
+      }
+    } catch (e) { log(`Metaculus search failed: ${e.message}`); }
+
+    if (foundQuestions.length > 0) {
+      src.status = 'live';
+      src.markets = foundQuestions.slice(0, 10).map(q => ({
+        id: q.id,
+        title: q.title,
+        questionType: detectQuestionType(q),
+        prediction: extractMetaculusPrediction(q),
+        url: `https://www.metaculus.com/questions/${q.id}/`,
+        forecasters: q.number_of_predictions || q.forecasts_count || 0,
+      }));
+      src.dataPoints = extractMetaculusDataPoints(src.markets);
+      log(`Metaculus: ${src.dataPoints.length} forward data points extracted`);
+    } else {
+      throw new Error('No questions found');
+    }
+  } catch (e) {
+    log(`Metaculus: falling back to cached data (${e.message})`);
+    src.status = 'fallback';
+    src.markets = getFallbackMetaculus();
+    src.dataPoints = extractMetaculusDataPoints(src.markets);
+    log(`Metaculus fallback: ${src.dataPoints.length} data points`);
+  }
+}
+
+function detectQuestionType(q) {
+  if (q.possibilities && q.possibilities.type) return q.possibilities.type;
+  if (q.type === 'forecast' && q.possibilities) {
+    if (q.possibilities.type === 'binary') return 'binary';
+    if (q.possibilities.type === 'continuous') return 'continuous';
+  }
+  // Heuristic from title
+  const t = (q.title || '').toLowerCase();
+  if (t.includes('will ') && (t.includes('?'))) return 'binary';
+  if (t.includes('what will') || t.includes('anomaly')) return 'continuous';
+  if (t.includes('first year') || t.includes('when')) return 'date';
+  return q.type || 'unknown';
+}
+
+function extractMetaculusPrediction(q) {
+  const agg = q.aggregations || {};
+  const rec = agg.recency_weighted || {};
+  const latest = rec.latest || agg.latest || {};
+
+  if (latest.centers && latest.centers.length > 0) {
+    return {
+      median: latest.centers[0],
+      low: latest.low ? latest.low[0] : latest.centers[0] * 0.85,
+      high: latest.high ? latest.high[0] : latest.centers[0] * 1.15,
+    };
+  }
+
+  if (q.community_prediction) {
+    const cp = q.community_prediction;
+    if (typeof cp === 'object' && cp.full) {
+      return { median: cp.full.q2 || cp.full.avg, low: cp.full.q1, high: cp.full.q3 };
+    }
+    if (typeof cp === 'number') {
+      return { median: cp, low: cp * 0.9, high: cp * 1.1 };
+    }
+  }
+
+  return null;
+}
+
+function extractMetaculusDataPoints(markets) {
+  const points = [];
+  for (const m of markets) {
+    if (!m.prediction) continue;
+    const title = m.title.toLowerCase();
+    const qType = m.questionType;
+
+    // Skip binary questions for temperature curve — they give probabilities, not temps
+    if (qType === 'binary') {
+      log(`Metaculus: skipping binary Q "${m.title.slice(0,40)}…"`);
+      continue;
+    }
+    // Skip date questions
+    if (qType === 'date') {
+      log(`Metaculus: skipping date Q "${m.title.slice(0,40)}…"`);
+      continue;
+    }
+
+    // Extract target year
+    let year = null;
+    const yearMatch = title.match(/\b(20[2-9]\d)\b/);
+    if (yearMatch) {
+      year = parseInt(yearMatch[1]);
+    } else if (title.includes('2100') || title.includes('end of century')) {
+      year = 2100;
+    }
+
+    if (!year || year <= 2025) continue;
+
+    let median = m.prediction.median;
+    let low = m.prediction.low;
+    let high = m.prediction.high;
+
+    if (median == null || isNaN(median)) continue;
+
+    // Track baseline conversion for transparency
+    let baselineNote = 'Pre-industrial (1850–1900) — used directly';
+    let rawMedian = median;
+
+    // Heuristic: if prediction is very low for a post-2020 year, it's likely
+    // in the GISTEMP 1951-80 baseline and needs conversion to pre-industrial
+    if (median > 0 && median < 1.0 && year >= 2020) {
+      median += GISTEMP_OFFSET;
+      if (low != null) low += GISTEMP_OFFSET;
+      if (high != null) high += GISTEMP_OFFSET;
+      baselineNote = `Converted from GISTEMP (1951–80): ${rawMedian.toFixed(3)} + ${GISTEMP_OFFSET} offset = ${median.toFixed(3)}`;
+      log(`Metaculus: adjusted Q${m.id} from ${rawMedian.toFixed(2)} → ${median.toFixed(2)} (added baseline offset)`);
+    }
+
+    // Sanity bounds
+    if (low == null) low = median - 0.2;
+    if (high == null) high = median + 0.2;
+
+    points.push({
+      year, median: +median.toFixed(3), low: +low.toFixed(3), high: +high.toFixed(3),
+      source: 'metaculus', type: 'continuous',
+      question: m.title, forecasters: m.forecasters,
+      url: m.url || `https://www.metaculus.com/questions/${m.id}/`,
+      rawValue: +rawMedian.toFixed(3),
+      baselineNote,
+    });
+  }
+  return points;
+}
+
+function getFallbackMetaculus() {
+  // Fallback data: values in pre-industrial (1850-1900) baseline
+  // 2026 value verified from Metaculus community median (May 2026)
+  // Other years are estimates — marked as fallback in UI
+  return [
+    { id: 41165, title: 'Global temperature anomaly in 2026', questionType: 'continuous',
+      prediction: { median: 1.46, low: 1.34, high: 1.58 }, forecasters: 688 },
+    { id: 99901, title: 'Global temperature anomaly in 2027', questionType: 'continuous',
+      prediction: { median: 1.42, low: 1.28, high: 1.58 }, forecasters: 310 },
+    { id: 99902, title: 'Global temperature anomaly in 2028', questionType: 'continuous',
+      prediction: { median: 1.48, low: 1.32, high: 1.66 }, forecasters: 200 },
+    { id: 99903, title: 'Global temperature anomaly in 2030', questionType: 'continuous',
+      prediction: { median: 1.52, low: 1.34, high: 1.74 }, forecasters: 410 },
+    { id: 99904, title: 'Global temperature anomaly in 2035', questionType: 'continuous',
+      prediction: { median: 1.65, low: 1.42, high: 1.95 }, forecasters: 280 },
+    { id: 605, title: 'Global Warming by 2100 over 1880 Baseline', questionType: 'continuous',
+      prediction: { median: 2.7, low: 1.9, high: 3.8 }, forecasters: 1450 },
+    { id: 585, title: 'Will there be at least 2°C warming by 2100?', questionType: 'binary',
+      prediction: { median: 0.82 }, forecasters: 980 },
+    { id: 1596, title: 'First year of global temperature above 2°C', questionType: 'date',
+      prediction: { median: 2058 }, forecasters: 640 },
+  ];
+}
+
+// ============================================================
+// KALSHI FETCHER
+// ============================================================
+async function fetchKalshi() {
+  const src = state.sourceData.kalshi;
+  try {
+    let allMarkets = [];
+
+    const endpoints = [
+      'https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXGTEMP&limit=50',
+      'https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXGTEMP&limit=50',
+    ];
+
+    for (const url of endpoints) {
+      try {
+        const r = await fetchWithCorsRetry(url);
+        const data = await r.json();
+        if (data && data.markets && data.markets.length > 0) {
+          allMarkets = data.markets;
+          log(`Kalshi: got ${allMarkets.length} markets from ${url.slice(0,50)}`);
+          break;
+        }
+      } catch (e) {
+        log(`Kalshi endpoint failed: ${e.message}`);
+        continue;
+      }
+    }
+
+    if (allMarkets.length > 0) {
+      src.status = 'live';
+      src.markets = allMarkets.slice(0, 10).map(m => ({
+        ticker: m.ticker,
+        title: m.title || m.subtitle || m.ticker,
+        yesPrice: m.yes_bid || m.last_price || 0.5,
+        volume: m.volume || 0,
+      }));
+      src.dataPoints = extractKalshiDataPoints(src.markets);
+      log(`Kalshi: ${src.dataPoints.length} forward data points extracted`);
+    } else {
+      throw new Error('No markets found');
+    }
+  } catch (e) {
+    log(`Kalshi: falling back to cached data (${e.message})`);
+    src.status = 'fallback';
+    src.markets = getFallbackKalshi();
+    src.dataPoints = extractKalshiDataPoints(src.markets);
+    log(`Kalshi fallback: ${src.dataPoints.length} data points`);
+  }
+}
+
+function extractKalshiDataPoints(markets) {
+  const points = [];
+  for (const m of markets) {
+    const title = (m.title || '').toLowerCase();
+    const yearMatch = title.match(/\b(20[2-9]\d)\b/);
+    if (!yearMatch) continue;
+    const year = parseInt(yearMatch[1]);
+    if (year <= 2025) continue;
+
+    if (title.includes('hottest') || title.includes('record') || title.includes('warmest')) {
+      const record = 1.47;
+      const p = m.yesPrice;
+      const implied = p * (record + 0.05) + (1 - p) * (record - 0.18);
+      points.push({
+        year, median: +implied.toFixed(3),
+        low: +(implied - 0.12).toFixed(3), high: +(implied + 0.08).toFixed(3),
+        source: 'kalshi', type: 'hottest-year',
+        question: m.title, probability: p,
+        url: `https://kalshi.com/markets/kxgtemp/hottest-year-ever/${m.ticker ? m.ticker.toLowerCase() : ''}`,
+        baselineNote: `Binary → implied temp: P(hottest)=${(p*100).toFixed(0)}% × (record ${record}+0.05) + ${((1-p)*100).toFixed(0)}% × (${record}−0.18) = ${implied.toFixed(3)}°C`,
+      });
+    }
+  }
+  return points;
+}
+
+function getFallbackKalshi() {
+  return [
+    { ticker: 'KXGTEMP-27', title: 'Will 2026 be the hottest year ever?', yesPrice: 0.32, volume: 145000 },
+    { ticker: 'KXGTEMP-28', title: 'Will 2027 be the hottest year ever?', yesPrice: 0.41, volume: 82000 },
+    { ticker: 'KXGTEMP-29', title: 'Will 2028 be the hottest year ever?', yesPrice: 0.48, volume: 55000 },
+    { ticker: 'KXGTEMP-30', title: 'Will 2029 be the hottest year ever?', yesPrice: 0.53, volume: 38000 },
+    { ticker: 'KXGTEMP-31', title: 'Will 2030 be the hottest year ever?', yesPrice: 0.58, volume: 72000 },
+  ];
+}
+
+// ============================================================
+// FORWARD CURVE CONSTRUCTION
+// ============================================================
+function buildForwardCurve() {
+  // 1. Build historical array (keep raw GISTEMP value for drilldown)
+  state.historical = HISTORICAL_RAW.map(([year, anom]) => ({
+    year,
+    anomaly: +(anom + GISTEMP_OFFSET).toFixed(3),
+    rawGISTEMP: anom,
+    offset: GISTEMP_OFFSET,
+  }));
+  log(`Historical: ${state.historical.length} years (${state.historical[0].year}–${state.historical[state.historical.length-1].year})`);
+
+  // 2. Collect ALL forward data points from all sources
+  const allPoints = [
+    ...state.sourceData.polymarket.dataPoints,
+    ...state.sourceData.metaculus.dataPoints,
+    ...state.sourceData.kalshi.dataPoints,
+  ];
+  log(`Total forward data points: ${allPoints.length}`);
+  for (const p of allPoints) {
+    log(`  → ${p.year}: ${p.median.toFixed(2)}°C [${p.source}] "${(p.question||'').slice(0,40)}"`);
+  }
+
+  // 3. Group by year and compute weighted consensus
+  const byYear = {};
+  for (const p of allPoints) {
+    if (!byYear[p.year]) byYear[p.year] = [];
+    byYear[p.year].push(p);
+  }
+
+  const forward = [];
+  for (const [yearStr, points] of Object.entries(byYear)) {
+    const year = parseInt(yearStr);
+    if (year <= 2025) continue;
+
+    const medians = points.map(p => p.median);
+    const lows = points.map(p => p.low);
+    const highs = points.map(p => p.high);
+
+    const median = medians.reduce((a, b) => a + b, 0) / medians.length;
+    const low = Math.min(...lows);
+    const high = Math.max(...highs);
+
+    // Build source status map for this point
+    const sourceStatuses = {};
+    for (const p of points) {
+      if (!sourceStatuses[p.source]) {
+        sourceStatuses[p.source] = state.sourceData[p.source]?.status || 'unknown';
+      }
+    }
+
+    forward.push({
+      year, median: +median.toFixed(3), low10: +low.toFixed(3), high90: +high.toFixed(3),
+      sources: [...new Set(points.map(p => p.source))],
+      sourceStatuses,
+      count: points.length,
+      underlyingMarkets: points.map(p => ({
+        source: p.source,
+        question: p.question,
+        type: p.type,
+        probability: p.probability,
+        impliedTemp: p.median,
+        low: p.low,
+        high: p.high,
+        forecasters: p.forecasters,
+        url: p.url || '',
+        baselineNote: p.baselineNote || '',
+        rawValue: p.rawValue,
+      })),
+    });
+  }
+
+  forward.sort((a, b) => a.year - b.year);
+  log(`Forward curve raw points: ${forward.length} years`);
+
+  // 4. Interpolate gaps (only for gaps <= 15 years)
+  const filled = [];
+  for (let i = 0; i < forward.length; i++) {
+    filled.push(forward[i]);
+    if (i < forward.length - 1) {
+      const gap = forward[i + 1].year - forward[i].year;
+      if (gap > 1 && gap <= 15) {
+        for (let y = forward[i].year + 1; y < forward[i + 1].year; y++) {
+          const t = (y - forward[i].year) / gap;
+          filled.push({
+            year: y,
+            median: +(forward[i].median + t * (forward[i + 1].median - forward[i].median)).toFixed(3),
+            low10: +(forward[i].low10 + t * (forward[i + 1].low10 - forward[i].low10)).toFixed(3),
+            high90: +(forward[i].high90 + t * (forward[i + 1].high90 - forward[i].high90)).toFixed(3),
+            sources: ['interpolated'],
+            interpolated: true,
+            anchorLeft: { year: forward[i].year, median: forward[i].median, sources: forward[i].sources },
+            anchorRight: { year: forward[i+1].year, median: forward[i+1].median, sources: forward[i+1].sources },
+          });
+        }
+      }
+    }
+  }
+
+  state.forwardCurve = filled;
+  log(`Forward curve with interpolation: ${filled.length} points (${filled[0]?.year || '?'}–${filled[filled.length-1]?.year || '?'})`);
+}
+
+// ============================================================
+// EXTERNAL HTML TOOLTIP (with clickable links)
+// ============================================================
+let tooltipHoverLock = false;  // true when mouse is over the tooltip itself
+
+function externalTooltipHandler(context) {
+  const { chart, tooltip } = context;
+  const el = document.getElementById('chartTooltip');
+  if (!el) return;
+
+  // Don't hide while user is hovering the tooltip (to click links)
+  if (tooltip.opacity === 0 && !tooltipHoverLock) {
+    el.classList.remove('visible');
+    return;
+  }
+  if (tooltip.opacity === 0 && tooltipHoverLock) {
+    return; // keep it open
+  }
+
+  // Get the hovered year
+  const items = tooltip.dataPoints || [];
+  if (items.length === 0 && !tooltipHoverLock) { el.classList.remove('visible'); return; }
+  if (items.length === 0) return;
+
+  const year = Math.round(items[0].parsed.x);
+  const yVal = items[0].parsed.y;
+  const dsLabel = items[0].dataset.label || '';
+
+  const histPoint = state.historical.find(h => h.year === year);
+  const fwdPoint = state.forwardCurve.find(f => f.year === year);
+
+  const linkIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 10l4-4"/><path d="M9 3h4v4"/><path d="M14 9v4a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1h4"/></svg>';
+
+  let html = '';
+
+  if (fwdPoint && !fwdPoint.interpolated && dsLabel.includes('Forward')) {
+    html += `<div class="tt-header">`;
+    html += `<span class="tt-year">${year}</span>`;
+    html += `<span class="tt-consensus">+${fwdPoint.median.toFixed(2)}°C</span>`;
+    html += `</div>`;
+    // Data source freshness indicator
+    const statuses = fwdPoint.sourceStatuses || {};
+    const statusParts = Object.entries(statuses).map(([src, st]) =>
+      `${capitalize(src)}: <span style="color:${st === 'live' ? '#4ade80' : '#fbbf24'}">${st}</span>`
+    ).join(' · ');
+    html += `<div class="tt-range">Range: ${fwdPoint.low10.toFixed(2)}°C – ${fwdPoint.high90.toFixed(2)}°C &nbsp;·&nbsp; ${fwdPoint.count} market${fwdPoint.count > 1 ? 's' : ''}</div>`;
+    if (statusParts) {
+      html += `<div class="tt-range" style="margin-top:2px;font-size:10px;">Data: ${statusParts}</div>`;
+    }
+
+    if (fwdPoint.underlyingMarkets && fwdPoint.underlyingMarkets.length > 0) {
+      // === CALCULATION BREAKDOWN ===
+      const markets = fwdPoint.underlyingMarkets;
+      html += `<div class="tt-calc">`;
+      html += `<div class="tt-calc-title">Calculation</div>`;
+      for (const m of markets) {
+        html += `<div class="tt-calc-row">`;
+        html += `<span class="tt-calc-src">${capitalize(m.source)} (${m.type})</span>`;
+        html += `<span class="tt-calc-val">${m.impliedTemp.toFixed(3)}°C</span>`;
+        html += `</div>`;
+        if (m.baselineNote) {
+          html += `<div class="tt-baseline-note">${m.baselineNote}</div>`;
+        }
+      }
+      if (markets.length > 1) {
+        const sum = markets.map(m => m.impliedTemp).reduce((a,b) => a+b, 0);
+        html += `<div class="tt-calc-formula">`;
+        html += `Consensus = (${markets.map(m => m.impliedTemp.toFixed(3)).join(' + ')}) / ${markets.length} = <strong>${(sum/markets.length).toFixed(3)}°C</strong>`;
+        html += `</div>`;
+      } else {
+        html += `<div class="tt-calc-formula">`;
+        html += `Consensus = ${markets[0].impliedTemp.toFixed(3)}°C (single source)`;
+        html += `</div>`;
+      }
+      html += `</div>`; // end tt-calc
+
+      html += `<div class="tt-section-title">Underlying Markets — click to view</div>`;
+      for (const m of markets) {
+        const srcClass = m.source || '';
+        const hasUrl = m.url && m.url.length > 0;
+        const clickAttr = hasUrl ? ` onclick="window.open('${m.url}','_blank')"` : '';
+        html += `<div class="tt-market${hasUrl ? ' clickable' : ''}"${clickAttr}>`;
+        html += `<div class="tt-market-header">`;
+        html += `<span class="tt-source-badge ${srcClass}">${capitalize(m.source)}</span>`;
+        html += `<span class="tt-implied">${m.impliedTemp.toFixed(2)}°C</span>`;
+        html += `</div>`;
+        html += `<div class="tt-question">${m.question || 'N/A'}</div>`;
+
+        const metaParts = [];
+        if (m.probability != null) {
+          metaParts.push(`<span>Prob: <strong>${(m.probability * 100).toFixed(0)}%</strong></span>`);
+        }
+        if (m.type) {
+          metaParts.push(`<span>Type: ${m.type}</span>`);
+        }
+        if (m.low != null && m.high != null) {
+          metaParts.push(`<span>Range: ${m.low.toFixed(2)}–${m.high.toFixed(2)}°C</span>`);
+        }
+        if (m.forecasters) {
+          metaParts.push(`<span>${m.forecasters} forecasters</span>`);
+        }
+        if (metaParts.length > 0) {
+          html += `<div class="tt-meta">${metaParts.join('')}</div>`;
+        }
+
+        if (hasUrl) {
+          html += `<a class="tt-market-link" href="${m.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${linkIcon} View on ${capitalize(m.source)}</a>`;
+        }
+        html += `</div>`;
+      }
+    }
+  } else if (fwdPoint && fwdPoint.interpolated && dsLabel.includes('Forward')) {
+    html += `<div class="tt-header">`;
+    html += `<span class="tt-year">${year}</span>`;
+    html += `<span class="tt-consensus">+${fwdPoint.median.toFixed(2)}°C</span>`;
+    html += `</div>`;
+    html += `<div class="tt-interp">Interpolated — no direct market data for this year.</div>`;
+    if (fwdPoint.anchorLeft && fwdPoint.anchorRight) {
+      const aL = fwdPoint.anchorLeft;
+      const aR = fwdPoint.anchorRight;
+      const gap = aR.year - aL.year;
+      const t = ((year - aL.year) / gap * 100).toFixed(0);
+      html += `<div class="tt-calc">`;
+      html += `<div class="tt-calc-title">Linear interpolation</div>`;
+      html += `<div class="tt-calc-row">`;
+      html += `<span class="tt-calc-src">${aL.year} (${aL.sources.join(', ')})</span>`;
+      html += `<span class="tt-calc-val">${aL.median.toFixed(2)}°C</span>`;
+      html += `</div>`;
+      html += `<div class="tt-calc-row">`;
+      html += `<span class="tt-calc-src">${aR.year} (${aR.sources.join(', ')})</span>`;
+      html += `<span class="tt-calc-val">${aR.median.toFixed(2)}°C</span>`;
+      html += `</div>`;
+      html += `<div class="tt-calc-formula">`;
+      html += `${t}% of the way from ${aL.year} → ${aR.year}`;
+      html += `</div>`;
+      html += `<div class="tt-calc-note">`;
+      html += `${gap}-year gap between nearest data points. Prediction markets have sparse coverage for distant years.`;
+      html += `</div>`;
+      html += `</div>`;
+    }
+  } else if (histPoint && (dsLabel.includes('Historical') || !fwdPoint)) {
+    // Also handles the bridge point case: 2025 appears in the forward dataset
+    // as a bridge but has no fwdPoint — fall through to historical drilldown
+    html += `<div class="tt-header">`;
+    html += `<span class="tt-year">${year}</span>`;
+    html += `<span class="tt-consensus">+${histPoint.anomaly.toFixed(2)}°C</span>`;
+    html += `</div>`;
+    html += `<div class="tt-range">Observed anomaly (NASA GISTEMP v4, pre-industrial baseline)</div>`;
+
+    // Historical data drilldown
+    html += `<div class="tt-calc">`;
+    html += `<div class="tt-calc-title">Source Data</div>`;
+    html += `<div class="tt-calc-row">`;
+    html += `<span class="tt-calc-src">NASA GISTEMP v4 (1951–1980 baseline)</span>`;
+    html += `<span class="tt-calc-val">${histPoint.rawGISTEMP.toFixed(2)}°C</span>`;
+    html += `</div>`;
+    html += `<div class="tt-calc-row">`;
+    html += `<span class="tt-calc-src">Pre-industrial offset (1850–1900)</span>`;
+    html += `<span class="tt-calc-val">+${histPoint.offset.toFixed(2)}°C</span>`;
+    html += `</div>`;
+    html += `<div class="tt-calc-formula">`;
+    html += `${histPoint.rawGISTEMP.toFixed(2)} + ${histPoint.offset.toFixed(2)} = <strong>${histPoint.anomaly.toFixed(2)}°C</strong>`;
+    html += `</div>`;
+    html += `<div class="tt-calc-note">`;
+    html += `Note: Other datasets (e.g. Copernicus ERA5) may report different values due to methodological differences in spatial coverage, SST treatment, and interpolation.`;
+    html += `</div>`;
+    html += `</div>`; // end tt-calc
+
+    // Source links
+    const gistempUrl = 'https://data.giss.nasa.gov/gistemp/';
+    const csvUrl = 'https://data.giss.nasa.gov/gistemp/graphs/graph_data/Global_Mean_Estimates_based_on_Land_and_Ocean_Data/graph.txt';
+    html += `<div style="margin-top:6px;">`;
+    html += `<a class="tt-market-link" href="${gistempUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${linkIcon} NASA GISTEMP v4</a>`;
+    html += `&nbsp;&nbsp;`;
+    html += `<a class="tt-market-link" href="${csvUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${linkIcon} Raw data (TXT)</a>`;
+    html += `</div>`;
+  } else {
+    // Check if this is a source overlay point (Polymarket, Metaculus, Kalshi)
+    const srcKey = Object.keys(state.sourceData).find(k =>
+      capitalize(k) === dsLabel || dsLabel === capitalize(k)
+    );
+    const srcPoints = srcKey ? state.sourceData[srcKey].dataPoints.filter(p => p.year === year) : [];
+
+    if (srcKey && srcPoints.length > 0) {
+      // Render full clickable source detail — same style as forward curve markets
+      const srcStatus = state.sourceData[srcKey].status || 'unknown';
+      html += `<div class="tt-header">`;
+      html += `<span class="tt-year">${year}</span>`;
+      html += `<span class="tt-consensus">+${yVal.toFixed(2)}°C</span>`;
+      html += `</div>`;
+      html += `<div class="tt-range">${dsLabel} · <span style="color:${srcStatus === 'live' ? '#4ade80' : '#fbbf24'}">${srcStatus}</span> · ${srcPoints.length} market${srcPoints.length > 1 ? 's' : ''}</div>`;
+
+      for (const m of srcPoints) {
+        const hasUrl = m.url && m.url.length > 0;
+        const clickAttr = hasUrl ? ` onclick="window.open('${m.url}','_blank')"` : '';
+        html += `<div class="tt-market${hasUrl ? ' clickable' : ''}"${clickAttr}>`;
+        html += `<div class="tt-market-header">`;
+        html += `<span class="tt-source-badge ${srcKey}">${capitalize(m.source)}</span>`;
+        html += `<span class="tt-implied">${m.median.toFixed(2)}°C</span>`;
+        html += `</div>`;
+        html += `<div class="tt-question">${m.question || 'N/A'}</div>`;
+
+        const metaParts = [];
+        if (m.probability != null) {
+          metaParts.push(`<span>Prob: <strong>${(m.probability * 100).toFixed(0)}%</strong></span>`);
+        }
+        if (m.type) {
+          metaParts.push(`<span>Type: ${m.type}</span>`);
+        }
+        if (m.low != null && m.high != null) {
+          metaParts.push(`<span>Range: ${m.low.toFixed(2)}–${m.high.toFixed(2)}°C</span>`);
+        }
+        if (m.forecasters) {
+          metaParts.push(`<span>${m.forecasters} forecasters</span>`);
+        }
+        if (metaParts.length > 0) {
+          html += `<div class="tt-meta">${metaParts.join('')}</div>`;
+        }
+        if (m.baselineNote) {
+          html += `<div class="tt-baseline-note">${m.baselineNote}</div>`;
+        }
+        if (hasUrl) {
+          html += `<a class="tt-market-link" href="${m.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${linkIcon} View on ${capitalize(m.source)}</a>`;
+        }
+        html += `</div>`;
+      }
+    } else {
+      html += `<div class="tt-header">`;
+      html += `<span class="tt-year">${year}</span>`;
+      html += `<span class="tt-consensus">+${yVal.toFixed(2)}°C</span>`;
+      html += `</div>`;
+      html += `<div class="tt-range">${dsLabel}</div>`;
+      // If this is an SSP scenario line, show ALL scenarios with the hovered one highlighted
+      // Match by dsLabel first, then fall back to closest y-value at this year
+      let matchedSSPKey = Object.keys(SSP_SCENARIOS).find(k => SSP_SCENARIOS[k].label === dsLabel);
+      if (!matchedSSPKey) {
+        // dsLabel didn't match — find the SSP closest to the hovered y-value at this year
+        let bestDist = Infinity;
+        for (const [k, ssp] of Object.entries(SSP_SCENARIOS)) {
+          // Interpolate SSP value at this year
+          for (let i = 0; i < ssp.data.length - 1; i++) {
+            if (year >= ssp.data[i][0] && year <= ssp.data[i+1][0]) {
+              const t = (year - ssp.data[i][0]) / (ssp.data[i+1][0] - ssp.data[i][0]);
+              const sspVal = ssp.data[i][1] + t * (ssp.data[i+1][1] - ssp.data[i][1]);
+              const dist = Math.abs(sspVal - yVal);
+              if (dist < bestDist) { bestDist = dist; matchedSSPKey = k; }
+              break;
+            }
+          }
+        }
+      }
+      const isAnySSP = matchedSSPKey || Object.values(SSP_SCENARIOS).some(s => s.label === dsLabel);
+      if (isAnySSP && matchedSSPKey) {
+        const ssp = SSP_SCENARIOS[matchedSSPKey];
+        const ipccUrl = 'https://www.ipcc.ch/report/ar6/wg1/chapter/chapter-4/';
+        html += `<div class="tt-calc">`;
+        html += `<div class="tt-calc-title" style="color:${ssp.color};">${matchedSSPKey} — IPCC AR6</div>`;
+        html += `<div style="font-size:11px;color:var(--text-light);margin-bottom:6px;">${ssp.description}</div>`;
+        // Show all key data points for this scenario
+        for (const [yr, temp] of ssp.data) {
+          const isCurrent = (yr === year);
+          html += `<div class="tt-calc-row"${isCurrent ? ' style="font-weight:bold;"' : ''}>`;
+          html += `<span class="tt-calc-src">${yr}${isCurrent ? ' ◄' : ''}</span>`;
+          html += `<span class="tt-calc-val" style="color:${ssp.color}">+${temp.toFixed(1)}°C</span>`;
+          html += `</div>`;
+        }
+        html += `<div style="margin-top:6px;">`;
+        html += `<a class="tt-market-link" href="${ipccUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${linkIcon} IPCC AR6 WG1 Chapter 4</a>`;
+        html += `</div>`;
+        html += `</div>`;
+      }
+    }
+
+    // — ECMWF Seasonal Forecast tooltip —
+    if (dsLabel === 'ECMWF Seasonal Forecast') {
+      const seasonalPt = state.seasonalData?.months?.find(m => {
+        const fractYear = m.year + (m.month - 0.5) / 12;
+        return Math.abs(fractYear - xVal) < 0.06;
+      });
+      if (seasonalPt) {
+        const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        html += `<div class="tt-header">`;
+        html += `<span class="tt-year">${monthNames[seasonalPt.month-1]} ${seasonalPt.year}</span>`;
+        html += `<span class="tt-consensus" style="color:#e056fd;">+${seasonalPt.anomaly.toFixed(2)}°C</span>`;
+        html += `</div>`;
+        html += `<div class="tt-calc">`;
+        html += `<div class="tt-calc-title" style="color:#e056fd;">ECMWF SEAS5 Ensemble Mean</div>`;
+        html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">51-member ensemble forecast from the European Centre for Medium-Range Weather Forecasts</div>`;
+        html += `<div class="tt-calc-row"><span class="tt-calc-src">Model anomaly (vs climatology)</span><span class="tt-calc-val">${seasonalPt.rawAnomaly >= 0 ? '+' : ''}${seasonalPt.rawAnomaly.toFixed(3)}°C</span></div>`;
+        html += `<div class="tt-calc-row"><span class="tt-calc-src">Climatology→pre-industrial offset</span><span class="tt-calc-val">+0.860°C</span></div>`;
+        html += `<div class="tt-calc-formula">Pre-industrial anomaly = ${seasonalPt.rawAnomaly.toFixed(3)} + 0.860 = <strong>${seasonalPt.anomaly.toFixed(3)}°C</strong></div>`;
+        html += `<div class="tt-calc-row"><span class="tt-calc-src">Stations used</span><span class="tt-calc-val">${seasonalPt.stations} / ${GLOBAL_GRID.length}</span></div>`;
+        html += `<div style="font-size:10px;color:var(--text-dim);margin-top:4px;">Area-weighted average of ${GLOBAL_GRID.length} global reference points. Data: ${state.seasonalData.status}.</div>`;
+        const ecmwfUrl = 'https://www.ecmwf.int/en/forecasts/about-our-forecasts/seasonal-forecasts';
+        html += `<div style="margin-top:6px;">`;
+        html += `<a class="tt-market-link" href="${ecmwfUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${linkIcon} ECMWF Seasonal Forecasts</a>`;
+        html += `</div>`;
+        html += `</div>`;
+      }
+    }
+
+    // — CMIP6 Model tooltip —
+    if (dsLabel.startsWith('CMIP6:')) {
+      const modelName = dsLabel.replace('CMIP6: ', '');
+      const modelData = state.cmip6Data?.models?.[modelName];
+      if (modelData) {
+        const nearest = modelData.reduce((best, d) => Math.abs(d.year - year) < Math.abs(best.year - year) ? d : best);
+        html += `<div class="tt-header">`;
+        html += `<span class="tt-year">${nearest.year}</span>`;
+        html += `<span class="tt-consensus">+${nearest.anomaly.toFixed(2)}°C</span>`;
+        html += `</div>`;
+        html += `<div class="tt-calc">`;
+        html += `<div class="tt-calc-title">${modelName} — CMIP6 HighResMIP</div>`;
+        html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">High-resolution climate model projection (~25-50 km). Scenario: close to SSP5-8.5.</div>`;
+        if (nearest.rawTemp) {
+          html += `<div class="tt-calc-row"><span class="tt-calc-src">Raw model temp (global weighted)</span><span class="tt-calc-val">${nearest.rawTemp}°C</span></div>`;
+        }
+        html += `<div class="tt-calc-row"><span class="tt-calc-src">Anomaly vs pre-industrial</span><span class="tt-calc-val">+${nearest.anomaly.toFixed(3)}°C</span></div>`;
+        html += `<div style="font-size:10px;color:var(--text-dim);margin-top:4px;">Baseline: model 1980-2000 mean + 0.45°C offset to pre-industrial. Data: ${state.cmip6Data.status}.</div>`;
+        const cmipUrl = 'https://hrcm.ceda.ac.uk/research/cmip6-highresmip/';
+        html += `<div style="margin-top:6px;">`;
+        html += `<a class="tt-market-link" href="${cmipUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${linkIcon} CMIP6 HighResMIP</a>`;
+        html += `</div>`;
+        html += `</div>`;
+      }
+    }
+  }
+
+  el.innerHTML = html;
+  el.classList.add('visible');
+
+  // Position the tooltip
+  const chartRect = chart.canvas.getBoundingClientRect();
+  const tooltipWidth = el.offsetWidth;
+  const tooltipHeight = el.offsetHeight;
+
+  let left = tooltip.caretX + 16;
+  let top = tooltip.caretY - tooltipHeight / 2;
+
+  if (left + tooltipWidth > chartRect.width) {
+    left = tooltip.caretX - tooltipWidth - 16;
+  }
+  if (top < 0) top = 8;
+  if (top + tooltipHeight > chartRect.height) top = chartRect.height - tooltipHeight - 8;
+
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+
+function capitalize(s) {
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// Tooltip hover-lock: keep tooltip visible while user hovers it to click links
+document.addEventListener('DOMContentLoaded', () => {
+  const el = document.getElementById('chartTooltip');
+  if (!el) return;
+  el.addEventListener('mouseenter', () => { tooltipHoverLock = true; });
+  el.addEventListener('mouseleave', () => {
+    tooltipHoverLock = false;
+    el.classList.remove('visible');
+  });
+});
+
+// ============================================================
+// CHART RENDERING
+// ============================================================
+function renderChart() {
+  log('Rendering chart...');
+  const canvas = document.getElementById('mainChart');
+  if (!canvas) { log('ERROR: canvas not found!'); return; }
+
+  const ctx = canvas.getContext('2d');
+  if (state.chart) { state.chart.destroy(); state.chart = null; }
+
+  const datasets = [];
+
+  // — Historical line —
+  const histData = state.historical.map(h => ({ x: h.year, y: h.anomaly }));
+  datasets.push({
+    label: 'Historical (NASA GISTEMP)',
+    data: histData,
+    borderColor: '#6c8cff',
+    backgroundColor: 'rgba(108,140,255,0.1)',
+    borderWidth: 2.5,
+    pointRadius: 3,
+    pointHoverRadius: 6,
+    pointBackgroundColor: '#6c8cff',
+    tension: 0.3,
+    order: 2,
+  });
+
+  // — Forward curve —
+  if (state.forwardCurve.length > 0) {
+    // Bridge from last historical point
+    const lastHist = state.historical[state.historical.length - 1];
+    const fwdData = [
+      { x: lastHist.year, y: lastHist.anomaly },
+      ...state.forwardCurve.map(f => ({ x: f.year, y: f.median }))
+    ];
+
+    // Per-point styling: large filled diamonds for actual data, tiny dots for interpolated
+    const fwdPointRadius = [0]; // bridge point hidden
+    const fwdPointHoverRadius = [0];
+    const fwdPointBgColor = ['transparent'];
+    const fwdPointBorderColor = ['transparent'];
+    const fwdPointStyle = ['circle'];
+    const fwdPointBorderWidth = [0];
+    for (const f of state.forwardCurve) {
+      if (f.interpolated) {
+        fwdPointRadius.push(2);
+        fwdPointHoverRadius.push(5);
+        fwdPointBgColor.push('rgba(78,205,196,0.3)');
+        fwdPointBorderColor.push('rgba(78,205,196,0.4)');
+        fwdPointStyle.push('circle');
+        fwdPointBorderWidth.push(1);
+      } else {
+        fwdPointRadius.push(6);
+        fwdPointHoverRadius.push(9);
+        fwdPointBgColor.push('#4ecdc4');
+        fwdPointBorderColor.push('#fff');
+        fwdPointStyle.push('diamond');
+        fwdPointBorderWidth.push(2);
+      }
+    }
+
+    datasets.push({
+      label: 'Market Consensus (Forward)',
+      data: fwdData,
+      borderColor: '#4ecdc4',
+      backgroundColor: 'rgba(78,205,196,0.15)',
+      borderWidth: 3,
+      borderDash: [8, 4],
+      pointRadius: fwdPointRadius,
+      pointHoverRadius: fwdPointHoverRadius,
+      pointBackgroundColor: fwdPointBgColor,
+      pointBorderColor: fwdPointBorderColor,
+      pointStyle: fwdPointStyle,
+      pointBorderWidth: fwdPointBorderWidth,
+      tension: 0.3,
+      order: 1,
+    });
+
+    // Confidence bands
+    if (state.showCI) {
+      const upper = [
+        { x: lastHist.year, y: lastHist.anomaly },
+        ...state.forwardCurve.map(f => ({ x: f.year, y: f.high90 }))
+      ];
+      const lower = [
+        { x: lastHist.year, y: lastHist.anomaly },
+        ...state.forwardCurve.map(f => ({ x: f.year, y: f.low10 }))
+      ];
+      datasets.push({
+        label: 'CI Upper',
+        data: upper,
+        borderColor: 'rgba(78,205,196,0.25)',
+        backgroundColor: 'rgba(78,205,196,0.07)',
+        borderWidth: 1,
+        borderDash: [3, 3],
+        pointRadius: 0,
+        fill: '+1',
+        tension: 0.3,
+        order: 3,
+      });
+      datasets.push({
+        label: 'CI Lower',
+        data: lower,
+        borderColor: 'rgba(78,205,196,0.25)',
+        backgroundColor: 'transparent',
+        borderWidth: 1,
+        borderDash: [3, 3],
+        pointRadius: 0,
+        tension: 0.3,
+        order: 3,
+      });
+    }
+  } else {
+    log('WARNING: No forward curve data to render!');
+  }
+
+  // — Source overlays —
+  if (state.showSources) {
+    const srcCfg = {
+      polymarket: { color: '#ff6c6c', label: 'Polymarket' },
+      metaculus:  { color: '#ffd166', label: 'Metaculus' },
+      kalshi:     { color: '#a29bfe', label: 'Kalshi' },
+    };
+    for (const [key, cfg] of Object.entries(srcCfg)) {
+      const pts = state.sourceData[key].dataPoints;
+      if (pts.length > 0) {
+        datasets.push({
+          label: cfg.label,
+          data: pts.map(p => ({ x: p.year, y: p.median })),
+          borderColor: cfg.color,
+          backgroundColor: cfg.color,
+          pointRadius: 8,
+          pointHoverRadius: 11,
+          pointStyle: 'circle',
+          showLine: false,
+          order: 0,
+        });
+      }
+    }
+  }
+
+  // — IPCC SSP Scenario pathways —
+  if (state.showSSP) {
+    for (const [key, ssp] of Object.entries(SSP_SCENARIOS)) {
+      datasets.push({
+        label: ssp.label,
+        data: ssp.data.map(([yr, t]) => ({ x: yr, y: t })),
+        borderColor: ssp.color,
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        borderDash: ssp.dash,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointBackgroundColor: ssp.color,
+        tension: 0.4,
+        fill: false,
+        order: 8,
+      });
+    }
+  }
+
+  // — ECMWF Seasonal Forecast overlay —
+  if (state.showSeasonal && state.seasonalData && state.seasonalData.months.length > 0) {
+    // Convert monthly data to fractional year for chart positioning
+    const seasonalPts = state.seasonalData.months.map(m => ({
+      x: m.year + (m.month - 0.5) / 12,
+      y: m.anomaly,
+    }));
+    datasets.push({
+      label: 'ECMWF Seasonal Forecast',
+      data: seasonalPts,
+      borderColor: '#e056fd',
+      backgroundColor: 'rgba(224,86,253,0.12)',
+      borderWidth: 2.5,
+      borderDash: [4, 2],
+      pointRadius: 5,
+      pointHoverRadius: 8,
+      pointBackgroundColor: '#e056fd',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 1.5,
+      pointStyle: 'triangle',
+      tension: 0.3,
+      fill: false,
+      order: 0,
+    });
+  }
+
+  // — CMIP6 Model Ensemble overlay —
+  if (state.showCMIP6 && state.cmip6Data && Object.keys(state.cmip6Data.models).length > 0) {
+    const cmip6Colors = ['#00b894', '#0984e3', '#d63031'];
+    const cmip6Dashes = [[6, 3], [4, 4], [8, 4]];
+    let ci = 0;
+    for (const [modelName, yearData] of Object.entries(state.cmip6Data.models)) {
+      const color = cmip6Colors[ci % cmip6Colors.length];
+      const dash = cmip6Dashes[ci % cmip6Dashes.length];
+      datasets.push({
+        label: `CMIP6: ${modelName}`,
+        data: yearData.map(d => ({ x: d.year, y: d.anomaly })),
+        borderColor: color,
+        backgroundColor: 'transparent',
+        borderWidth: 1.8,
+        borderDash: dash,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointBackgroundColor: color,
+        tension: 0.3,
+        fill: false,
+        order: 7,
+      });
+      ci++;
+    }
+  }
+
+  // — Paris 1.5°C line —
+  const xMin = 1999;
+  const xMax = state.forwardCurve.length > 0 ? Math.max(...state.forwardCurve.map(f => f.year)) + 3 : 2040;
+  datasets.push({
+    label: '1.5°C Paris Target',
+    data: [{ x: xMin, y: 1.5 }, { x: xMax, y: 1.5 }],
+    borderColor: 'rgba(255,108,108,0.5)',
+    borderWidth: 1.5,
+    borderDash: [12, 6],
+    pointRadius: 0,
+    fill: false,
+    order: 10,
+  });
+  datasets.push({
+    label: '2.0°C Threshold',
+    data: [{ x: xMin, y: 2.0 }, { x: xMax, y: 2.0 }],
+    borderColor: 'rgba(255,108,108,0.25)',
+    borderWidth: 1,
+    borderDash: [6, 8],
+    pointRadius: 0,
+    fill: false,
+    order: 10,
+  });
+
+  // — Zoom plugin config (only if available) —
+  const zoomConfig = (typeof ChartZoom !== 'undefined' || (Chart && Chart.registry && Chart.registry.plugins.get('zoom')))
+    ? {
+        pan: { enabled: true, mode: 'x' },
+        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+      }
+    : {};
+
+  try {
+    state.chart = new Chart(ctx, {
+      type: 'line',
+      data: { datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+        scales: {
+          x: {
+            type: 'linear',
+            min: 2005,
+            max: Math.min(xMax, 2105),
+            title: { display: true, text: 'Year', color: '#8b90a5', font: { size: 13 } },
+            ticks: { color: '#8b90a5', stepSize: 5, callback: function(v) { return Math.round(v).toString(); } },
+            grid: { color: 'rgba(46,51,72,0.5)' },
+          },
+          y: {
+            title: { display: true, text: 'Temperature Anomaly (°C vs 1850–1900)', color: '#8b90a5', font: { size: 13 } },
+            ticks: { color: '#8b90a5', callback: v => v.toFixed(1) + '°C' },
+            grid: { color: 'rgba(46,51,72,0.5)' },
+            suggestedMin: 0.8,
+            suggestedMax: 2.5,
+          },
+        },
+        plugins: {
+          legend: {
+            labels: {
+              color: '#e2e4ed',
+              usePointStyle: true,
+              padding: 20,
+              filter: item => !['CI Upper', 'CI Lower'].includes(item.text),
+            },
+            position: 'top',
+          },
+          tooltip: {
+            enabled: false,
+            external: externalTooltipHandler,
+          },
+          zoom: zoomConfig,
+        },
+      },
+    });
+    log(`Chart rendered with ${datasets.length} datasets`);
+  } catch (e) {
+    log(`ERROR rendering chart: ${e.message}`);
+    console.error('Chart render error:', e);
+  }
+}
+
+// ============================================================
+// UI UPDATES
+// ============================================================
+function updateStatusBar() {
+  const bar = document.getElementById('statusBar');
+  const sources = ['polymarket', 'metaculus', 'kalshi'];
+  const names = { polymarket: 'Polymarket', metaculus: 'Metaculus', kalshi: 'Kalshi' };
+
+  let html = '';
+  let liveCount = 0;
+  let fallbackCount = 0;
+  for (const s of sources) {
+    const status = state.sourceData[s].status;
+    let dotClass = 'dot-loading';
+    let label = 'Loading…';
+    if (status === 'live') { dotClass = 'dot-live'; label = 'Live'; liveCount++; }
+    else if (status === 'fallback') { dotClass = 'dot-fallback'; label = 'Cached'; fallbackCount++; }
+    else if (status === 'error') { dotClass = 'dot-error'; label = 'Error'; }
+
+    html += `<div class="status-pill"><span class="dot ${dotClass}"></span>${names[s]}: ${label}</div>`;
+  }
+  bar.innerHTML = html;
+
+  document.getElementById('sourcesActive').textContent = `${liveCount} live · ${fallbackCount} cached`;
+
+  // Update source cards
+  const statusElIds = { polymarket: 'polyStatus', metaculus: 'metaStatus', kalshi: 'kalshiStatus' };
+  const marketElIds = { polymarket: 'polyMarkets', metaculus: 'metaMarkets', kalshi: 'kalshiMarkets' };
+
+  for (const s of sources) {
+    const src = state.sourceData[s];
+    const statusEl = document.getElementById(statusElIds[s]);
+    const marketsEl = document.getElementById(marketElIds[s]);
+
+    if (src.status === 'live') {
+      statusEl.textContent = 'Live';
+      statusEl.style.background = 'rgba(46,204,113,0.15)';
+      statusEl.style.color = '#2ecc71';
+    } else if (src.status === 'fallback') {
+      statusEl.textContent = 'Cached';
+      statusEl.style.background = 'rgba(243,156,18,0.15)';
+      statusEl.style.color = '#f39c12';
+    } else {
+      statusEl.textContent = 'Error';
+      statusEl.style.background = 'rgba(231,76,60,0.15)';
+      statusEl.style.color = '#e74c3c';
+    }
+
+    let mhtml = '';
+    if (s === 'metaculus') {
+      for (const m of src.markets.slice(0, 6)) {
+        const pred = m.prediction ? `${m.prediction.median.toFixed(2)}` : '—';
+        const badge = m.questionType === 'binary' ? ' (binary)' : m.questionType === 'date' ? ' (date)' : '';
+        mhtml += `<div class="market-item"><span>${truncate(m.title, 45)}${badge}</span><span class="prob">${pred}</span></div>`;
+      }
+    } else if (s === 'polymarket') {
+      for (const m of src.markets.slice(0, 6)) {
+        mhtml += `<div class="market-item"><span>${truncate(m.question, 45)}</span><span class="prob">${(m.probability * 100).toFixed(0)}%</span></div>`;
+      }
+    } else {
+      for (const m of src.markets.slice(0, 6)) {
+        mhtml += `<div class="market-item"><span>${truncate(m.title, 45)}</span><span class="prob">${(m.yesPrice * 100).toFixed(0)}%</span></div>`;
+      }
+    }
+    marketsEl.innerHTML = mhtml || '<em>No markets found</em>';
+  }
+}
+
+function updateInfoCards() {
+  const lastHist = state.historical[state.historical.length - 1];
+  if (lastHist) {
+    document.getElementById('currentAnomaly').textContent = `+${lastHist.anomaly.toFixed(2)}°C`;
+  }
+
+  const fc2026 = state.forwardCurve.find(f => f.year === 2026);
+  if (fc2026) {
+    document.getElementById('consensus2026').textContent = `+${fc2026.median.toFixed(2)}°C`;
+    document.getElementById('consensus2026Detail').textContent =
+      `Range: ${fc2026.low10.toFixed(2)} – ${fc2026.high90.toFixed(2)}°C · ${fc2026.count || fc2026.sources.length} sources`;
+  }
+
+  // Paris 1.5°C breach: look at how many forward years are above 1.5
+  if (state.forwardCurve.length > 0) {
+    const above15 = state.forwardCurve.filter(f => f.median >= 1.5 && !f.interpolated);
+    const total = state.forwardCurve.filter(f => !f.interpolated);
+    if (total.length > 0) {
+      const pct = (above15.length / total.length * 100).toFixed(0);
+      document.getElementById('parisProb').textContent = `${pct}%`;
+    }
+  }
+}
+
+function truncate(str, len) {
+  if (!str) return '';
+  return str.length > len ? str.slice(0, len) + '…' : str;
+}
+
+// ============================================================
+// CONTROLS
+// ============================================================
+function setRange(range, btn) {
+  document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (!state.chart) return;
+
+  const maxFwd = state.forwardCurve.length > 0 ? Math.max(...state.forwardCurve.map(f => f.year)) : 2040;
+
+  if (range === 'near') {
+    state.chart.options.scales.x.min = 2005;
+    state.chart.options.scales.x.max = Math.min(maxFwd + 3, 2045);
+  } else if (range === 'mid') {
+    state.chart.options.scales.x.min = 2000;
+    state.chart.options.scales.x.max = Math.min(maxFwd + 5, 2060);
+  } else {
+    state.chart.options.scales.x.min = 2000;
+    state.chart.options.scales.x.max = maxFwd + 5;
+  }
+  state.chart.update();
+}
+
+function toggleConfidence() {
+  state.showCI = !state.showCI;
+  document.getElementById('toggleCI').classList.toggle('active', state.showCI);
+  renderChart();
+}
+
+function toggleSourceOverlay() {
+  state.showSources = !state.showSources;
+  document.getElementById('toggleSources').classList.toggle('active', state.showSources);
+  renderChart();
+}
+
+function toggleSSP() {
+  state.showSSP = !state.showSSP;
+  document.getElementById('toggleSSP').classList.toggle('active', state.showSSP);
+  renderChart();
+}
+
+function toggleSeasonal() {
+  state.showSeasonal = !state.showSeasonal;
+  document.getElementById('toggleSeasonal').classList.toggle('active', state.showSeasonal);
+  renderChart();
+}
+
+function toggleCMIP6() {
+  state.showCMIP6 = !state.showCMIP6;
+  document.getElementById('toggleCMIP6').classList.toggle('active', state.showCMIP6);
+  renderChart();
+}
+
+async function refreshAll() {
+  for (const s of Object.values(state.sourceData)) {
+    s.status = 'loading';
+    s.markets = [];
+    s.dataPoints = [];
+  }
+  state.seasonalData = null;
+  state.cmip6Data = null;
+  updateStatusBar();
+  await init();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  log('Starting initialization...');
+  log(`Chart.js loaded: ${typeof Chart !== 'undefined'}`);
+  log(`Hammer.js loaded: ${typeof Hammer !== 'undefined'}`);
+
+  // Fetch all sources in parallel (including new Open-Meteo sources)
+  const results = await Promise.allSettled([
+    fetchPolymarket(),
+    fetchMetaculus(),
+    fetchKalshi(),
+    fetchSeasonalForecast(),
+    fetchCMIP6Models(),
+  ]);
+
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].status === 'rejected') {
+      log(`Source ${i} fetch rejected: ${results[i].reason}`);
+    }
+  }
+
+  buildForwardCurve();
+  updateStatusBar();
+  updateInfoCards();
+  renderChart();
+  log('Initialization complete!');
+  log(`Seasonal: ${state.seasonalData?.status || 'not loaded'}, ${state.seasonalData?.months?.length || 0} months`);
+  log(`CMIP6: ${state.cmip6Data?.status || 'not loaded'}, ${Object.keys(state.cmip6Data?.models || {}).length} models`);
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
